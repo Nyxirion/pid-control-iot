@@ -28,3 +28,6 @@ typedef struct
     bool useAntiWindup;
 
 } pid_controller_t;
+
+void initPID(pid_controller_t *pid);
+float computePID(pid_controller_t *pid, float measurement);

@@ -1,5 +1,11 @@
-#include <stdio.h>
 #include "pid-controller.h"
+
+void initPID(pid_controller_t* pid){
+    pid->integral = 0.0f;
+    pid->prevError = 0.0f;
+    pid->derivative = 0.0f;
+    pid->output = 0.0f;
+}
 
 float computePID(pid_controller_t *pid, float measurement){
     float error = pid->setpoint - measurement;
