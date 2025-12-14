@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+
 typedef struct
 {
     //basic parameters
@@ -15,7 +16,7 @@ typedef struct
 
     //config
     float setpoint;
-    float sampleTime;
+    float sampleTime; // in seconds
     float filterTau;
     float antiWindupGain;
 
@@ -29,5 +30,5 @@ typedef struct
 
 } pid_controller_t;
 
-void initPID(pid_controller_t *pid);
+void pid_config_init(pid_controller_t *pid);
 float computePID(pid_controller_t *pid, float measurement);
