@@ -48,7 +48,7 @@ esp_err_t setPWM(void){
 
 }
 
-esp_err_t get_distance()
+esp_err_t get_distance();
 void pid_task(void *pvParameter){
 
 }
