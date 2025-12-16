@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -6,13 +7,58 @@
 #include "driver/ledc.h"
 #include "pid-controller.h"
 #include "ultrasonic.h"
+#include "esp_wifi.h"
 
+// defines para el pid
 #define MAX_DISTANCE_CM 500
 #define H_MAX 36.05 // Altura máxima del tanque
 #define TRIGGER_GPIO 17
 #define ECHO_GPIO 16
 #define STACK_SIZE 4096
 
+// defines para el wifi
+#define ESP_WIFI_SSID "ESP32 tank controller"
+#define ESP_WIFI_PASS "tank-controller-1234"
+#define ESP_WIFI_CHANNEL 1
+#define MAX_STA_CONN 2
+
+//wifi event handler//
+static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data){
+    printf("event nr: %ld!\n", event_id);
+}
+// function to initialize wifi//
+void wifi_init_softap()
+{
+    // this initialize the IP stack
+    esp_event_loop_create_default();
+    esp_netif_init();
+    esp_netif_create_default_wifi_ap();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    esp_wifi_init(&cfg);
+
+    esp_event_handler_instance_register(WIFI_EVENT,
+                                        ESP_EVENT_ANY_ID,
+                                        &wifi_event_handler,
+                                        NULL,
+                                        NULL);
+    wifi_config_t wifi_config ={
+        .ap ={
+            .ssid = ESP_WIFI_SSID,
+            .ssid_len = strlen(ESP_WIFI_SSID),
+            .channel = ESP_WIFI_CHANNEL,
+            .password = ESP_WIFI_PASS,
+            .max_connection = MAX_STA_CONN,
+            .authmode = WIFI_AUTH_WPA2_PSK,
+            .pmf_cfg ={
+                .required = true,
+            }
+        }
+    };
+    esp_wifi_set_mode(WIFI_MODE_AP);
+    esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
+    esp_wifi_start();
+}
 // pid object//
 pid_controller_t pid_level = {
     .kp = 20,
@@ -78,8 +124,6 @@ void pid_task(void *pvParameter)
                        xExecutionTime * portTICK_PERIOD_MS, xPeriod * portTICK_PERIOD_MS);
             }
             vTaskDelayUntil(&xLastWakeTime, xPeriod);
-            
-            
         }
     }
 }
@@ -118,14 +162,15 @@ esp_err_t create_task(void)
                             "TareaPID",
                             STACK_SIZE,
                             &ucParameterToPass,
-                            1, //Priority
+                            1, // Priority
                             &xHandle,
-                            1); //core number
+                            1); // core number
     return ESP_OK;
 }
 
 void app_main(void)
 {
+    wifi_init_softap();
     ultrasonic_init(&sonic_sensor);
     setPWM();
     pid_config_init(&pid_level);
