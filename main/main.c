@@ -8,6 +8,7 @@
 #include "pid-controller.h"
 #include "ultrasonic.h"
 #include "esp_wifi.h"
+#include "nvs_flash.h"
 
 // defines para el pid
 #define MAX_DISTANCE_CM 500
@@ -22,8 +23,9 @@
 #define ESP_WIFI_CHANNEL 1
 #define MAX_STA_CONN 2
 
-//wifi event handler//
-static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data){
+// wifi event handler//
+static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+{
     printf("event nr: %ld!\n", event_id);
 }
 // function to initialize wifi//
@@ -42,19 +44,17 @@ void wifi_init_softap()
                                         &wifi_event_handler,
                                         NULL,
                                         NULL);
-    wifi_config_t wifi_config ={
-        .ap ={
+    wifi_config_t wifi_config = {
+        .ap = {
             .ssid = ESP_WIFI_SSID,
             .ssid_len = strlen(ESP_WIFI_SSID),
             .channel = ESP_WIFI_CHANNEL,
             .password = ESP_WIFI_PASS,
             .max_connection = MAX_STA_CONN,
             .authmode = WIFI_AUTH_WPA2_PSK,
-            .pmf_cfg ={
+            .pmf_cfg = {
                 .required = true,
-            }
-        }
-    };
+            }}};
     esp_wifi_set_mode(WIFI_MODE_AP);
     esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
     esp_wifi_start();
@@ -170,6 +170,15 @@ esp_err_t create_task(void)
 
 void app_main(void)
 {
+    //initialize NVS for wifi
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
     wifi_init_softap();
     ultrasonic_init(&sonic_sensor);
     setPWM();
