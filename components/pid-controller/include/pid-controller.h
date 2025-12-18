@@ -30,5 +30,11 @@ typedef struct
 
 } pid_controller_t;
 
+typedef struct
+{
+    float measurement;
+    float output;
+} pid_broadcast_data_t;
+
 void pid_config_init(pid_controller_t *pid);
 float computePID(pid_controller_t *pid, float measurement);
