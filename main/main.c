@@ -22,7 +22,7 @@ static const char* TAG = "Server";
 //defines para el websocket server 
 //para el server
 httpd_handle_t server = NULL;
-char index_html[] = "<!DOCTYPE html><html><head><title>Page Title</title></head><body style='background-color: #EEEEEE;'><span style='color: #003366;'><h1>Lets generate a random number</h1><p>The random number is: <span id='rand'>-</span></p><p><button type='button' id='BTN_SEND_BACK'>Send info to ESP32</button></p></span></body><script> var Socket; document.getElementById('BTN_SEND_BACK').addEventListener('click', button_send_back); function init() { let gateway = 'http://192.168.4.1/ws'; Socket = new WebSocket(gateway); Socket.onmessage = function(event) { processCommand(event); }; } function button_send_back() { Socket.send('toggle'); } function processCommand(event) { document.getElementById('rand').innerHTML = event.data; console.log(event.data); } window.onload = function(event) { init(); }</script></html>";
+char index_html[] = "<!DOCTYPE html><html><head><title>Page Title</title></head><body style='background-color: #EEEEEE;'><span style='color: #003366;'><h1>Lets generate a random number</h1><p>The random number is: <span id='rand'>-</span></p><p><button type='button' id='BTN_SEND_BACK'>Send info to ESP32</button></p></span></body><script> var Socket; document.getElementById('BTN_SEND_BACK').addEventListener('click', button_send_back); function init() { let gateway = 'http://192.168.4.1/ws'; Socket = new WebSocket(gateway); Socket.onmessage = function(event) { processCommand(event); }; } function button_send_back() { Socket.send('toggle'); } function processCommand(event) { const data = JSON.parse(event.data); console.log('Nivel actual:',data.measurement); console.log('Output PID:', data.output); document.getElementById('rand').innerHTML = event.data; console.log(event.data); } window.onload = function(event) { init(); }</script></html>";
 char buffer[4096];
 
 
@@ -121,6 +121,7 @@ void pid_task(void *pvParameter)
     const TickType_t xPeriod = pdMS_TO_TICKS(500);
 
     float distance;
+    pid_broadcast_data_t pid_data = {0};
     while (1)
     {
         TickType_t xStartTime = xTaskGetTickCount();
@@ -155,8 +156,12 @@ void pid_task(void *pvParameter)
 
             //hasta aquí termina el PID
 
-            printf("sending distance to Queue\n");
-            if(!xQueueSend(pid_to_broadcast_queue, &distance, 0)){
+            //empaquetado de datos en la estructura
+            printf("distance is %.2f\n", distance);
+            pid_data.measurement = distance;
+            pid_data.output = pid_level.output;
+
+            if(!xQueueSend(pid_to_broadcast_queue, &pid_data, 0)){
                 printf("Error Sending to queue\n");
             }
             //
@@ -175,14 +180,18 @@ void pid_task(void *pvParameter)
 
 void broadcast_task(void *pvParameter)
 {
-    float level = 0;
     while(1){
-        if(!xQueueReceive(pid_to_broadcast_queue, &level, pdMS_TO_TICKS(2000))){
+        pid_broadcast_data_t received;
+
+        if(!xQueueReceive(pid_to_broadcast_queue, &received, pdMS_TO_TICKS(2000))){
             printf("ERROR recibiendo dato en la cola");
         }
     else{
-        printf("Level desde queue %.2fcm\n",level);
+        char json[128];
+        snprintf(json, sizeof(json), "{\"measurement\":%f, \"output\":%f}", received.measurement, received.output);
+        send_to_all_clients(json);
         }
+        
     }
     
 }
@@ -357,7 +366,7 @@ void app_main(void)
     ultrasonic_init(&sonic_sensor);
     setPWM();
     //defining queues 
-    pid_to_broadcast_queue = xQueueCreate(10, sizeof(float));
+    pid_to_broadcast_queue = xQueueCreate(10, sizeof(pid_broadcast_data_t));
     // //
     pid_config_init(&pid_level);
     create_task();
