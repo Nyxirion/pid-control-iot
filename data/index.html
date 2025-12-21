@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PID TANK CONTROLLER</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>TANK PID DASHBOARD</h2>
+        </div>
+        <div class="content">
+            <div id="tank-container">
+                <h2 id="tank-header">Level Indicator</h2>
+                <div id="tank">
+                    <div id="liquid"></div>
+                    <div id="setpoint"></div>
+                    <div id="readout">0%</div>
+                </div>
+            </div>
+            <div id="plot">
+                <h2 id="plot-header">Respuesta del Sistema</h2>
+                <canvas id="chart" width="300" height="200"></canvas>
+            </div>
+            <div></div>
+            <div></div>
+        </div>
+    </div>
+    <script src="./smoothie.js"></script>
+    <script src="./js.js"></script>
+</body>
+</html>
