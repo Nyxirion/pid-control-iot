@@ -13,7 +13,7 @@
 #include "esp_log.h"
 #include "freertos/queue.h"
 
-//Declarar cola para la comunicacion entre tareas 
+//Declaring the queue for task communication 
 QueueHandle_t pid_to_broadcast_queue = 0;
 
 //defines para el LOG 
@@ -266,7 +266,7 @@ esp_err_t ws_handler(httpd_req_t *req)
     ws_pkt.type = HTTPD_WS_TYPE_TEXT; //tipo de dato de ws pkt
 
     /* Set max_len = 0 to get the frame len */
-    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0); //aquí se obtienen metadatos
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "httpd_ws_recv_frame failed to get frame len with %d", ret);
         return ret;

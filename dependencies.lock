@@ -1,6 +1,6 @@
 dependencies:
   esp-idf-lib/esp_idf_lib_helpers:
-    component_hash: a8049b1e609679fb54b2d57b0399dd29c4d1fda09a797edac9926f7810aa5703
+    component_hash: 689853bb8993434f9556af0f2816e808bf77b5d22100144b21f3519993daf237
     dependencies: []
     source:
       registry_url: https://components.espressif.com
@@ -16,7 +16,7 @@ dependencies:
     - esp32p4
     - esp32s2
     - esp32s3
-    version: 1.3.10
+    version: 1.4.0
   esp-idf-lib/ultrasonic:
     component_hash: ed5d2a566151e9254a4a673fcf566e163e4f5252967db4d76accc41d42459cb6
     dependencies:
@@ -43,9 +43,20 @@ dependencies:
     source:
       type: idf
     version: 6.1.0
+  joltwallet/littlefs:
+    component_hash: 1808d73e99168f6f3c26dd31799a248484762b3a320ec4962dec11a145f4277f
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.20.3
 direct_dependencies:
 - esp-idf-lib/ultrasonic
 - idf
-manifest_hash: c3e1838555fa63c08c91af030576b61a2792e5fa8cbd9101e013fab1d5b6e93d
+- joltwallet/littlefs
+manifest_hash: ebcd8108ddb2e054df530d97b23dfc63b08c4767505f218e9806e5ce7542c29c
 target: esp32
 version: 2.0.0
