@@ -13,6 +13,9 @@
 #include "esp_log.h"
 #include "freertos/queue.h"
 
+#include "esp_littlefs.h"
+#include "sys/stat.h"
+
 //Declaring the queue for task communication 
 QueueHandle_t pid_to_broadcast_queue = 0;
 
@@ -22,7 +25,7 @@ static const char* TAG = "Server";
 //defines para el websocket server 
 //para el server
 httpd_handle_t server = NULL;
-char index_html[] = "<!DOCTYPE html><html><head><title>Page Title</title></head><body style='background-color: #EEEEEE;'><span style='color: #003366;'><h1>Lets generate a random number</h1><p>The random number is: <span id='rand'>-</span></p><p><button type='button' id='BTN_SEND_BACK'>Send info to ESP32</button></p></span></body><script> var Socket; document.getElementById('BTN_SEND_BACK').addEventListener('click', button_send_back); function init() { let gateway = 'http://192.168.4.1/ws'; Socket = new WebSocket(gateway); Socket.onmessage = function(event) { processCommand(event); }; } function button_send_back() { Socket.send('toggle'); } function processCommand(event) { const data = JSON.parse(event.data); console.log('Nivel actual:',data.measurement); console.log('Output PID:', data.output); document.getElementById('rand').innerHTML = event.data; console.log(event.data); } window.onload = function(event) { init(); }</script></html>";
+char index_html[4096];
 char buffer[4096];
 
 
@@ -362,6 +365,53 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    //LittleFS 
+    esp_vfs_littlefs_conf_t conf = {
+        .base_path = "/storage",
+        .partition_label = "storage",
+        .format_if_mount_failed = true,
+        .dont_mount = false,
+    };
+
+    ret = esp_vfs_littlefs_register(&conf);
+    if(ret != ESP_OK){
+        if(ret == ESP_FAIL){
+            ESP_LOGE(TAG, "Failed to mount or formar filesystem");
+        }
+        else if(ret == ESP_ERR_NOT_FOUND){
+            ESP_LOGE(TAG, "Failed to find LittleFS partition");
+        }
+        else{
+            ESP_LOGE(TAG, "Failed to initialize LittleFS (%s)", esp_err_to_name(ret));
+        }
+        return;
+    }
+
+    //necessary to have information about the partition
+    size_t total = 0, used = 0;
+    ret = esp_littlefs_info(conf.partition_label, &total, &used);
+    if(ret != ESP_OK){
+        ESP_LOGE(TAG, "Failed to get LittleFS partition information (%s)", esp_err_to_name(ret));
+    }
+    else{
+        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    }
+
+    memset((void *)index_html, 0, sizeof(index_html));
+    struct stat st; //prolly im gonna remove this for something more eficient 
+
+    if(stat("/storage/index.html", &st)){
+        ESP_LOGE(TAG, "index.html not found");
+        return;
+    }
+
+    FILE *fp = fopen("/storage/index.html", "r");
+    if(fread(index_html, st.st_size, 1, fp) == 0){
+        ESP_LOGE(TAG, "fread failed");
+    }
+    fclose(fp);
+
+    //wifi
     wifi_init_softap();
     ultrasonic_init(&sonic_sensor);
     setPWM();
