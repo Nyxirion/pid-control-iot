@@ -39,6 +39,16 @@ dependencies:
     - esp32s2
     - esp32s3
     version: 1.0.7
+  espressif/cjson:
+    component_hash: 9372811fb197926f522c467627cf4a8e72b681e0366e17879631da801103aef3
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.7.19
   idf:
     source:
       type: idf
@@ -55,8 +65,9 @@ dependencies:
     version: 1.20.3
 direct_dependencies:
 - esp-idf-lib/ultrasonic
+- espressif/cjson
 - idf
 - joltwallet/littlefs
-manifest_hash: ebcd8108ddb2e054df530d97b23dfc63b08c4767505f218e9806e5ce7542c29c
+manifest_hash: 7348ee529181246852e739355d9df4a52961c9f54fe17e0752621a4324c55f25
 target: esp32
 version: 2.0.0

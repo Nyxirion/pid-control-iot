@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
@@ -15,18 +16,20 @@
 
 #include "esp_littlefs.h"
 #include "sys/stat.h"
+#include "cJSON.h"
+
 
 //Declaring the queue for task communication 
 QueueHandle_t pid_to_broadcast_queue = 0;
-
+QueueHandle_t ws_handler_to_pid_queue = 0; // this queue is for client to pid 
 //defines para el LOG 
 static const char* TAG = "Server";
 
 //defines para el websocket server 
 //para el server
 httpd_handle_t server = NULL;
-char index_html[4096];
-char buffer[4096];
+char index_html[8192];
+char buffer[8192];
 
 
 //para el ws handler 
@@ -125,9 +128,16 @@ void pid_task(void *pvParameter)
 
     float distance;
     pid_broadcast_data_t pid_data = {0};
+    pid_client_params_t pid_params_recv = {0};
     while (1)
     {
         TickType_t xStartTime = xTaskGetTickCount();
+        //recibe parameters from clients
+        if(!xQueueReceive(ws_handler_to_pid_queue, &pid_params_recv, 0)){
+            printf("ERROR recibiendo dato en la cola");
+        }
+        pid_level.setpoint = pid_params_recv.setpoint;
+        //apply the change from client 
 
         esp_err_t res = ultrasonic_measure(&sonic_sensor, MAX_DISTANCE_CM, &distance);
         if (res != ESP_OK)
@@ -163,6 +173,7 @@ void pid_task(void *pvParameter)
             printf("distance is %.2f\n", distance);
             pid_data.measurement = distance;
             pid_data.output = pid_level.output;
+            pid_data.setpoint = pid_level.setpoint;
 
             if(!xQueueSend(pid_to_broadcast_queue, &pid_data, 0)){
                 printf("Error Sending to queue\n");
@@ -191,7 +202,7 @@ void broadcast_task(void *pvParameter)
         }
     else{
         char json[128];
-        snprintf(json, sizeof(json), "{\"measurement\":%f, \"output\":%f}", received.measurement, received.output);
+        snprintf(json, sizeof(json), "{\"measurement\":%f, \"output\":%f, \"setpoint\":%f}", received.measurement, received.output, received.setpoint);
         send_to_all_clients(json);
         }
         
@@ -298,12 +309,50 @@ esp_err_t ws_handler(httpd_req_t *req)
 
         //vienen las decisiones, if datos == APAGAR, entonces apaga
     ESP_LOGI(TAG, "Packet type: %d", ws_pkt.type);
-    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT &&
-        strcmp((char*)ws_pkt.payload,"tfff") == 0) {
+    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
+        
+        cJSON *json = cJSON_Parse((char*)ws_pkt.payload);
+        
+        if(json == NULL){
+            free(buf);
+            ESP_LOGE(TAG, "Falla en el CJSON");
+            return ret;
+        }
+        
+        pid_client_params_t pid_params = {0}; //estructura to send through queue
+        //accedidendo a valores dentro del json
+        cJSON *setpoint = cJSON_GetObjectItemCaseSensitive(json, "setpoint");
+        cJSON *kp = cJSON_GetObjectItemCaseSensitive(json, "kp");
+        cJSON *kd = cJSON_GetObjectItemCaseSensitive(json, "kd");
+        cJSON *ki = cJSON_GetObjectItemCaseSensitive(json, "ki");
+
+
+        if(cJSON_IsString(setpoint) && (setpoint->valuestring != NULL)){
+            float st_value = atof(setpoint->valuestring);
+            pid_params.setpoint = st_value;
+        }
+        if(cJSON_IsString(kp) && (kp->valuestring != NULL)){
+            float kp_value = atof(kp->valuestring);
+            pid_params.kp = kp_value;
+        }
+        if(cJSON_IsString(kd) && (kd->valuestring != NULL)){
+            float kd_value = atof(kd->valuestring);
+            pid_params.kd = kd_value;
+        }
+        if(cJSON_IsString(ki) && (ki->valuestring != NULL)){
+            float ki_value = atof(ki->valuestring);
+            pid_params.ki = ki_value;
+        }
         free(buf);
-        return printf("Chavez"); //funcion que dispara respuesta asincrona
+        cJSON_Delete(json);
+        if(!xQueueSend(ws_handler_to_pid_queue, &pid_params, 0)){
+                printf("Error Sending to queue\n");
+            }
+        return ret; 
     }
 
+
+    
     ret = httpd_ws_send_frame(req, &ws_pkt);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "httpd_ws_send_frame failed with %d", ret);
@@ -320,6 +369,60 @@ esp_err_t get_webpage(httpd_req_t *req)
     return response;
 }
 
+esp_err_t js_smoothie_handler(httpd_req_t *req){
+    FILE *fp = fopen("/storage/smoothie.js", "r");
+    if(!fp){
+        httpd_resp_send_404(req);
+        return ESP_FAIL;
+    }
+
+    // Configurar headers
+    httpd_resp_set_type(req, "application/javascript");
+    
+    // Buffer de 4KB
+    //char buff[2048] this is possible to declare here
+    size_t read;
+    
+    while ((read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+        if (httpd_resp_send_chunk(req, buffer, read) != ESP_OK) {
+            fclose(fp);
+            return ESP_FAIL;
+        }
+    }
+    
+    fclose(fp);
+    
+    // Finalizar respuesta
+    httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;    
+}
+
+esp_err_t js_js_handler(httpd_req_t *req){
+    FILE *fp = fopen("/storage/js.js", "r");
+    if (!fp) {
+        httpd_resp_send_404(req);
+        return ESP_FAIL;
+    }
+    
+    // Configurar headers
+    httpd_resp_set_type(req, "application/javascript");
+    
+    //char buffer[2048]; // Buffer de 2KB
+    size_t read;
+    
+    while ((read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+        if (httpd_resp_send_chunk(req, buffer, read) != ESP_OK) {
+            fclose(fp);
+            return ESP_FAIL;
+        }
+    }
+    
+    fclose(fp);
+    
+    // Finalizar respuesta
+    httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;    
+}
 // defining the URI's
 static const httpd_uri_t ws = {
         .uri        = "/ws",
@@ -332,6 +435,18 @@ static const httpd_uri_t wp = {
         .uri        = "/",
         .method     = HTTP_GET,
         .handler    = get_webpage,
+        .user_ctx   = NULL,
+};
+static const httpd_uri_t smoothie = {
+        .uri        = "/smoothie.js",
+        .method     = HTTP_GET,
+        .handler    = js_smoothie_handler,
+        .user_ctx   = NULL,    
+};
+static const httpd_uri_t js = {
+        .uri        = "/js.js",
+        .method     = HTTP_GET,
+        .handler    = js_js_handler,
         .user_ctx   = NULL,
 };
 
@@ -347,6 +462,8 @@ static httpd_handle_t start_webserver(void) //this function initialize the serve
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &wp);
         httpd_register_uri_handler(server, &ws);
+        httpd_register_uri_handler(server, &smoothie);
+        httpd_register_uri_handler(server, &js);
         return server;
     }
 
@@ -411,12 +528,13 @@ void app_main(void)
     }
     fclose(fp);
 
-    //wifi
+    //end of littleFS
     wifi_init_softap();
     ultrasonic_init(&sonic_sensor);
     setPWM();
     //defining queues 
     pid_to_broadcast_queue = xQueueCreate(10, sizeof(pid_broadcast_data_t));
+    ws_handler_to_pid_queue = xQueueCreate(10, sizeof(pid_client_params_t));
     // //
     pid_config_init(&pid_level);
     create_task();

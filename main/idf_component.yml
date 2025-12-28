@@ -16,3 +16,4 @@ dependencies:
   #   public: true
   esp-idf-lib/ultrasonic: '*'
   joltwallet/littlefs: ==1.20.3
+  espressif/cjson: ^1.7.19
