@@ -11,10 +11,10 @@ void pid_config_init(pid_controller_t* pid){
 float computePID(pid_controller_t *pid, float measurement){
     float error = pid->setpoint - measurement;
     float tentativeOutput; 
-    float windup_compensation = 0.0f;
+
     float P = pid->kp * error;
 
-    pid->integral = pid->integral + pid->ki * pid->sampleTime * 0.5f* (error + pid->prevError); 
+    float integralTerm = pid->integral + pid->ki * pid->sampleTime * 0.5f* (error + pid->prevError); 
 
     pid->derivative = 2.0f*pid->kd*(error - pid->prevError)/(pid->sampleTime + 2.0f* pid->filterTau)
                     + (2.0f*pid->filterTau - pid->sampleTime) * pid->derivative 
@@ -26,21 +26,37 @@ float computePID(pid_controller_t *pid, float measurement){
 
     if(tentativeOutput > pid->maxOutputLim){
         pid->output = pid->maxOutputLim;
-        windup_compensation = pid->maxOutputLim - tentativeOutput;
-    }
 
+        if(pid->useAntiWindup){
+            // No actualizar la integral cuando está saturada
+            // La integral permanece como estaba 
+            // No hacer nada con pid -> integral
+        }
+        
+        else{
+            pid->integral = integralTerm;
+        }
+
+
+    }
     else if(tentativeOutput < pid->minOutputLim){
         pid->output = pid->minOutputLim;
-        windup_compensation = pid->minOutputLim -tentativeOutput;
-    }
-    else{
-        pid->output = tentativeOutput;
+
+        // CLAMPING: solo actualizar la integral si NO está saturado
+        if(pid->useAntiWindup){
+            // No actualizar la integral cuando está saturada
+            // La integral permanece como estaba 
+        }
+        else{
+            pid->integral = integralTerm;
+        }
     }
 
-    if(pid->useAntiWindup){
-        // Asegurar que pid->antiWindupGain esté entre 0 y 1 (típicamente 0.1 a 1.0)
-        pid->integral = pid->integral + pid->antiWindupGain * windup_compensation;
-    }   
+    else{
+        pid->output = tentativeOutput;
+        // Si no está saturado, actualizar la integral normalmente
+        pid->integral = integralTerm;
+    }
 
 
     pid->prevError = error;

@@ -19,5 +19,6 @@
   "files.associations": {
     "stdbool.h": "c"
   },
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "idf.currentSetup": "/home/misa/esp/esp-idf"
 }
